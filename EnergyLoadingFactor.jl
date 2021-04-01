@@ -3,6 +3,7 @@
 # %% 
 using HDF5
 using Plots
+using Plots.PlotMeasures
 using GR
 using QuadGK
 using Printf
@@ -10,11 +11,11 @@ using LaTeXStrings
 using DelimitedFiles
 ENV["GKSwstype"] = "100"
 # %%
-H = 1 # height from galactic plane in kpc
+H = 0.5 # height from galactic plane in kpc
 rlim = 10 # limit of radius
 kmsinkpcyr = 3.1536e7/3.085677581e16 # 1 km/sec in kpc/yr
 # timestep = np.linspace(0.01,0.8,80)
-time = 250 # snapshot
+time = 100 # snapshot
 binwidth = 100
 binwidthtemp = 0.25
 patchsize = 0.5
@@ -43,7 +44,9 @@ models = [
     # ["centroid_model/ver09011_n1f2a1","Centroid model (new, alpha = -1.00)"],
     # ["centroid_model/ver12151","Centroid"],
     # ["ss_model/ver01092", "Spherical superbubble"],
+    # ["ss_model/ver01121", "Spherical superbubble"],
     ["ss_model/ver01193", "Spherical superbubble"],
+    # ["ss_model/ver03221", "Spherical superbubble"],
     # ["ss_model/ver12211", "Spherical superbubble"],
     # ["NoFB", "No feedback"],
     ]
@@ -65,6 +68,20 @@ function crosssection(hsml, z)
     end
     return quadgk(integrand, 0, sqrt(hsml^2 - z^2))[1]
 end
+function getcenter(sph)
+  x = y = z = mtot = 0
+  for i in 1:length(sph.mass)
+    x += sph.mass[i] * sph.pos[1, i]
+    y += sph.mass[i] * sph.pos[2, i]
+    z += sph.mass[i] * sph.pos[3, i]
+    mtot += sph.mass[i]
+  end
+  x /= mtot
+  y /= mtot
+  z /= mtot
+  return [x, y, z]
+end
+
 function main(H, sph, galaxy)
     SFR = [0.0 for i in 1:4*Range*Range]
     Gas = [0.0 for i in 1:4*Range*Range]
@@ -115,8 +132,8 @@ struct Sph
     sfr::Array{Float32, 1}
 end
 struct Galaxy
-    pos::Array{Float32, 2}
-    vel::Array{Float32, 2}
+    pos::Array{Float32, 1}
+    vel::Array{Float32, 1}
     sfr::Float32
     stellarmass::Float32
 end
@@ -145,13 +162,19 @@ for i in 1:length(models)
             global massstars = read(fp, "PartType4/Masses")
             global sph = Sph(pos, vel, hsml, mass, rho, temp, u, sfr)
         end
-        h5open(path2subfind, "r") do gp
-            galpos = read(gp,"Group/GroupPos")
-            galvel = read(gp,"Subhalo/SubhaloVel")
-            galsfr = sum(sfr)
-            stellarmass = sum(massstars)
-            global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
-        end
+        galpos = getcenter(sph)
+        galvel = [0, 0, 0]
+        galsfr = sum(sfr)
+        stellarmass = sum(massstars)
+        global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
+          
+      # h5open(path2subfind, "r") do gp
+      #   galpos = read(gp,"Group/GroupPos")
+      #   galvel = read(gp,"Subhalo/SubhaloVel")
+      #   galsfr = sum(sfr)
+      #   stellarmass = sum(massstars)
+      #   global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
+      # end
         results = main(H, sph, galaxy)
         SigmaSFR[i] = results[1]
         SigmaGas[i] = results[6]
@@ -173,27 +196,15 @@ eta_cold = readdlm("eta_cold.txt")
 
 using Plots
 gr()
-Plots.scalefontsizes(1.2)
-Plots.plot(legend=:bottomright,xlim=(1e-4, 1), ylim=(1e-7, 1), xscale=:log10, yscale=:log10, xlabel=latexstring("\$\\Sigma_{\\mathrm{SFR}} [M_{\\odot} \\mathrm{kpc}^{-2} \\mathrm{yr}^{-1}]\$"), ylabel=L"\eta_{\rm E}", xtickfont=font, ytickfont=font, xlabelfont=font, ylabelfont=font, legendfont=font, guidefont=font)
+font = Plots.font(16)
+lfont = Plots.font(12)
+Plots.plot(legend=:bottomleft,xlim=(1e-4, 1), ylim=(1e-7, 1), xscale=:log10, yscale=:log10, xlabel=latexstring("\$\\Sigma_{\\mathrm{SFR}} [M_{\\odot} \\mathrm{kpc}^{-2} \\mathrm{yr}^{-1}]\$"), ylabel=L"\eta_{\rm E}", xtickfont=font, ytickfont=font, xlabelfont=font, ylabelfont=font, legendfont=lfont, guidefont=font, topmargin=3mm, bottommargin=3mm, rightmargin=3mm)
 for i in 1:length(models)
 Plots.plot!(SigmaSFR[i], EnergyLoadingFactor[i][1], label="hot outflow (This work)", markersize=5, markercolor=:red, st=:scatter)
 Plots.plot!(SigmaSFR[i], EnergyLoadingFactor[i][2], label="cold outflow (This work)", markersize=5, markercolor=:blue, st=:scatter)
-Plots.plot!(eta_hot[:,1], eta_hot[:,2], label="hot outflow (Li & Bryan 20)", w = 3, markersize=5, markercolor=:lightsalmon, marker=:diamond, st=:scatter)
-Plots.plot!(eta_cold[:,1], eta_cold[:,2], label="cold outflow (Li & Bryan 20)", w = 3, markersize=5, markercolor=:skyblue, marker=:diamond, st=:scatter)
+Plots.scatter!(eta_hot[:,1], eta_hot[:,2], label="hot outflow (Li & Bryan 20)", markersize=5, markercolor=:red, marker=:xcross)
+Plots.scatter!(eta_cold[:,1], eta_cold[:,2], label="cold outflow (Li & Bryan 20)", markersize=5, markercolor=:blue, marker=:xcross)
 end
+# Plots.savefig("Energyloading.png")
 Plots.savefig("results/Energyloading.pdf")
 
-# Plots.plot(legend=:bottomright,xlim=(1e-4, 1), ylim=(1e12, 1e16), xscale=:log10, yscale=:log10)
-# for i in 1:length(models)
-# Plots.plot!(SigmaSFR[i], SpecificEnergy[i][1], label=models[i][2], st=:scatter)
-# Plots.plot!(SigmaSFR[i], SpecificEnergy[i][2], label=models[i][2], st=:scatter)
-# end
-# Plots.savefig("specificenergy.png")
-
-
-# Plots.plot(legend=:bottomright,xlim=(1e-2, 1e2), ylim=(1e-10, 1), xscale=:log10, yscale=:log10)
-# for i in 1:length(models)
-# Plots.plot!(map(x -> 0.1*x^-0.333, Density[i])./DiskHeight[i], EnergyLoadingFactor[i][1], label=models[i][2], st=:scatter)
-# Plots.plot!(map(x -> 0.1*x^-0.333, Density[i])./DiskHeight[i], EnergyLoadingFactor[i][2], label=models[i][2], st=:scatter)
-# end
-# Plots.savefig("diskheight.png")

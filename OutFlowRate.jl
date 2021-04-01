@@ -6,6 +6,7 @@ using Plots
 using GR
 using QuadGK
 using Printf
+using LaTeXStrings
 ENV["GKSwstype"] = "100"
 # %%
 H = 1 # height from galactic plane in kpc
@@ -80,7 +81,7 @@ function main(H, sph, galaxy)
     mdotvel = zeros(Int(numbin))
     binsvel = (binwidth/2):binwidth:(numbin-0.5)*binwidth
     tmax = log10(maximum(sph.temp))
-    numbintemp = ceil(tmax/binwidthtemp)
+    numbintemp = ceil(tmax/binwidthtemp)+10
     mdottemp = zeros(Int(numbintemp))
     binstemp = (binwidthtemp/2):binwidthtemp:(numbintemp-0.5)*binwidthtemp
     totalmdot = 0.0
@@ -103,7 +104,7 @@ function main(H, sph, galaxy)
             Energy = sph.mass[i]*(0.5*v^2 + sph.u[i])
             energyoutflow = Energy*2e53*crosssection(sph.hsml[i], dz)*v*kmsinkpcyr
             mdotvel[ibinvel] += outflow
-            mdottemp[ibintemp] += outflow
+            mdottemp[ibintemp] += outflow/binwidthtemp
             totalmdot += outflow
             totaledot += energyoutflow
         end
@@ -229,6 +230,14 @@ function averageoutflowvelocity(velocity, totalmassoutflow)
     println(total)
     return ret/total
 end
+function padding(array)
+    ret = []
+    for i in 1:length(array)
+        value = array[i] > 0 ? array[i] : 1e-10
+        push!(ret, value)
+    end
+    return ret
+end
 Xmaxvel = zeros(length(models))
 Ymaxvel = zeros(length(models))
 Yeffvel = zeros(length(models))
@@ -242,10 +251,12 @@ end
 # %%
 using Plots
 gr()
+
 X = 0.01:0.01:time*0.01
 
-Plots.plot(Xmaxvel, Ymaxvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
-Plots.plot(Xmaxvel, Yeffvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
+# Plots.plot(Xmaxvel, Ymaxvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
+# Plots.plot(Xmaxvel, Yeffvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
+Plots.scalefontsizes(1.2)
 
 Plots.plot(legend=:bottomright, ylim=(10,2000), yscale=:log10)
 for i in 1:length(models)
@@ -262,9 +273,9 @@ Plots.plot!(Xaxisvel[i][250], MassOutFlowRatevel[i][250], label=models[i][2])
 Plots.savefig("results/MassOutFlowVelocityHistgram.pdf")
 end
 
-Plots.plot(ylim=(1e-4,1e1), yscale=:log10, xlim=(3,7), xlabel="log Temperature [K]", ylabel="Mass outflow rate [Msun/yr]")
+Plots.plot(ylim=(1e-4,1e1), yscale=:log10, xlim=(3,7), xlabel=latexstring("\$\\log (T\\,\\,[\\mathrm{K}])\$"), ylabel=latexstring("\$ dM_{\\mathrm{out}}/d\\log T\\,\\,[M_{\\odot} \\mathrm{yr}^{-1}]\$"))
 for i in 1:length(models)
-Plots.plot!(Xaxistemp[i][250], MassOutFlowRatetemp[i][250], label=models[i][2])
+Plots.plot!(Xaxistemp[i][250], padding(MassOutFlowRatetemp[i][250]), label=models[i][2])
 end
 Plots.savefig("results/MassOutFlowTemperatureHistgram.pdf")
 

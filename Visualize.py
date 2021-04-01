@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import AxesGrid
 
-time = 250
+time = 255
 
 models = [
     ["ss_model/ver01193","Sphericalsuperbubble"],
@@ -27,11 +27,13 @@ ds = [0]*len(models)
 center = [0]*len(models)
 for i in range(len(models)):
     ds[i] = yt.load('{0}/snapshot_{1:03}/snapshot_{1:03}.hdf5'.format(models[i][0], time),unit_base=unit_base,bounding_box=bbox)
-    ad = ds[0].all_data()
-    density = ad[("PartType0","density")]
-    wdens = np.where(density == np.max(density))
-    coordinates = ad[("PartType0","Coordinates")]
-    center[i] = coordinates[wdens][0]
+    # ad = ds[0].all_data()
+    # density = ad[("PartType0","density")]
+    # wdens = np.where(density == np.max(density))
+    # coordinates = ad[("PartType0","Coordinates")]
+    # mass_centroid = ad.quantities.weighted_average_quantity("Coordinates", "Masses")
+    sp = ds[i].sphere("max", (40, 'kpc'))
+    center[i] = sp.quantities.center_of_mass()
 # print ('center = ',center)
 
 # %% density
@@ -96,8 +98,9 @@ for i in range(len(models)):
   plot.cax = grid.cbar_axes[i+len(models)]
   px.set_background_color(field)
   px._setup_plots()
-plt.savefig("results/plot{}.pdf".format(field), bbox_inches="tight")
-
+# plt.savefig("results/plot{}.pdf".format(field), bbox_inches="tight")
+plt.show()
+plt.close()
 # %% temperature 20kpc
 # ---------------------
 field = "temperature"
@@ -203,4 +206,4 @@ for i in range(len(models)):
   px.set_background_color(field)
   px._setup_plots()
 plt.savefig("results/plot{}200kpc.pdf".format(field), bbox_inches="tight")
-# %%
+
