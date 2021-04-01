@@ -45,9 +45,11 @@ models = [
     # ["centroid_model/ver12151","Centroid"],
     # ["ss_model/ver01092", "Spherical superbubble"],
     # ["ss_model/ver01121", "Spherical superbubble"],
-    ["ss_model/ver01193", "Spherical superbubble"],
+    # ["ss_model/ver01193", "Spherical superbubble"],
     # ["ss_model/ver03221", "Spherical superbubble"],
     # ["ss_model/ver12211", "Spherical superbubble"],
+    ["ss_model/ver03311", "with cool-off"],
+    ["ss_model/ver03311_NoCoolOff", "without cool-off"],
     # ["NoFB", "No feedback"],
     ]
 # %%
