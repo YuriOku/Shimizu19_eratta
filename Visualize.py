@@ -4,12 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import AxesGrid
 
-time = 255
+time = 250
 
 models = [
-    ["ss_model/ver01193","Sphericalsuperbubble"],
-    ["Osaka19", "Osaka2019"],
-    ["NoFB2", "Nofeedback"],
+    ["../ss_model/ver03311","with cool-off"],
+    ["../ss_model/ver03311_NoCoolOff","without cool-off"],
           ]
 unit_base = {'UnitLength_in_cm'         : 3.08568e+21,
              'UnitMass_in_g'            :   1.989e+43,
@@ -65,7 +64,7 @@ sorted(ds[0].field_list)
 field = "density"
 fig = plt.figure()
 grid = AxesGrid(fig, (0.075,0.075,0.85,0.85),
-                nrows_ncols = (2, 3),
+                nrows_ncols = (2, len(models)),
                 axes_pad = 0.05,
                 label_mode = "L",
                 share_all = True,
@@ -106,7 +105,7 @@ plt.close()
 field = "temperature"
 fig = plt.figure()
 grid = AxesGrid(fig, (0.075,0.075,0.85,0.85),
-                nrows_ncols = (2, 3),
+                nrows_ncols = (2, len(models)),
                 axes_pad = 0.05,
                 label_mode = "L",
                 share_all = True,
@@ -150,7 +149,7 @@ plt.savefig("results/plot{}20kpc.pdf".format(field), bbox_inches="tight")
 field = "temperature"
 fig = plt.figure()
 grid = AxesGrid(fig, (0.075,0.075,0.85,0.85),
-                nrows_ncols = (1, 3),
+                nrows_ncols = (1, len(models)),
                 axes_pad = 0.05,
                 label_mode = "L",
                 share_all = True,
@@ -181,7 +180,7 @@ plt.savefig("results/plot{}200kpc.pdf".format(field), bbox_inches="tight")
 field = "metallicity"
 fig = plt.figure()
 grid = AxesGrid(fig, (0.075,0.075,0.85,0.85),
-                nrows_ncols = (1, 3),
+                nrows_ncols = (1, len(models)),
                 axes_pad = 0.05,
                 label_mode = "L",
                 share_all = True,
@@ -207,3 +206,16 @@ for i in range(len(models)):
   px._setup_plots()
 plt.savefig("results/plot{}200kpc.pdf".format(field), bbox_inches="tight")
 
+
+# %%
+plot = yt.ParticlePlot(ds[0], ('PartType0', "Density"), ('PartType0', "temperature"), ('PartType0', "Masses"))
+plot.set_unit(('PartType0', "Density"), 'g/cm/cm/cm')
+plot.set_unit(('PartType0', "Masses"), 'Msun')
+plot.set_log(('PartType0', "Density"), True)
+plot.set_log(('PartType0', "temperature"), True)
+plot.set_xlim(1e-32, 1e-21)
+plot.set_ylim(5e1, 1e8)
+plot.set_zlim(('PartType0', "Masses"),1e4, 1e7)
+plot.hide_colorbar()
+
+# %%
