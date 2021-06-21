@@ -16,7 +16,7 @@ from statistics import stdev
 # %%
 time = 100 # at 1 Gyr
 models = [
-  ["Osaka2019_isogal", "Osaka2019"],
+  # ["Osaka2019_isogal", "Osaka2019"],
   # [ "geodome_model/ver_19.11.1", "Geodesic dome model & Cioffi+ 1988"],
   # [ "geodome_model/OKU2020", "Geodesic dome model & Athena fitting"],
   # [ "centroid_model/ver07271_NoMomCeiling", "Centroid model & Athena fitting (alpha = 0)"],
@@ -25,18 +25,20 @@ models = [
   # [ "centroid_model/ver07272_CHEVALIER1974", "Centroid model & Cioffi+ 1988"],
   # [ "centroid_model/ver07272_nfb1", "Centroid model & Athena fitting (nfb = 1)"],
   # [ "centroid_model/ver07272_SFE001", "Centroid model & Athena fitting (SFE = 0.01)"],
-    ["centroid_model/ver12151","Centroid"],
-    ["ss_model/ver01051","Spherical superbubble"],
-    ["ss_model/ver01092","Spherical superbubble"],
+    # ["centroid_model/ver12151","Centroid"],
+    # ["ss_model/ver01051","Spherical superbubble"],
+    # ["ss_model/ver01092","Spherical superbubble"],
+    ["../ss_model/ver03311/fiducial","fiducial"],
+    ["../ss_model/ver03311/med","high-reso"],
 ]
 snapshot = [0]*len(models)
-subfind  = [0]*len(models)
+# subfind  = [0]*len(models)
 for i in range(len(models)):
     snapshot[i] = h5py.File('{0}/snapshot_{1:03}/snapshot_{1:03}.hdf5'.format(models[i][0], time), 'r')
-    subfind[i]  = h5py.File('{0}/snapshot_{1:03}/groups_{1:03}/sub_{1:03}.hdf5'.format(models[i][0], time), 'r')
+    # subfind[i]  = h5py.File('{0}/snapshot_{1:03}/groups_{1:03}/sub_{1:03}.hdf5'.format(models[i][0], time), 'r')
 
 # %%
-H = 1 # disk height in kpc
+H = 0.25 # disk height in kpc
 patchsize = 0.75 # kpc
 Rmax = 10 # kpc
 Range = int(Rmax / patchsize)
@@ -54,9 +56,21 @@ SurfaceDensityProfile = [[[] for i in range(len(Profiles))] for j in range(len(m
 # BinPos = np.linspace(0,Rmax,NumBin+1)
 
 # Area = 4*math.pi*(np.roll(BinPos,-1)**2 - BinPos**2)[:-1]
+def getcenter(coord, mass):
+    x = y = z = mtot = 0
+    for i in range(len(mass)):
+      x += mass[i] * coord[i, 0]
+      y += mass[i] * coord[i, 1]
+      z += mass[i] * coord[i, 2]
+      mtot += mass[i]
+    x /= mtot
+    y /= mtot
+    z /= mtot
+    return [x, y, z]
+
 
 for k in range(len(models)):
-    GalPos  = subfind[k]['Group/GroupPos'][0]
+    GalPos  = getcenter(np.array(snapshot[k]['PartType0/Coordinates']), np.array(snapshot[k]['PartType0/Masses']))
 
     for l in trange(len(Profiles)):
         X = np.array(snapshot[k]['PartType{}/Coordinates'.format(Profiles[l][0])]).T[0] - GalPos[0]
@@ -66,15 +80,18 @@ for k in range(len(models)):
         
         for i in np.arange(-Range, Range):
           for j in np.arange(-Range, Range):
-            tmp = np.where((patchsize*i < X) & ( X < patchsize*(i+1))\
-             & (patchsize*j < Y) & (Y < patchsize*(j+1)) & (-H < Z) & (Z < H) , Weight, 0)
-            if Profiles[l][1] == "Masses":
-              area = patchsize*patchsize*1e6 # patchsize in pc^2
-              surfacedensity = sum(tmp)*1e10/area
-            elif Profiles[l][1] == "StarFormationRate":
-              area = patchsize*patchsize # patchsize in kpc^2
-              surfacedensity = sum(tmp)/area
-            SurfaceDensityProfile[k][l].append(surfacedensity)
+            if (max(i**2, (i+1)**2) + max(j**2, (j+1)**2) > Range**2+1):
+              continue
+            else:
+              tmp = np.where((patchsize*i < X) & ( X < patchsize*(i+1))\
+               & (patchsize*j < Y) & (Y < patchsize*(j+1)) & (-H < Z) & (Z < H) ,   Weight, 0)
+              if Profiles[l][1] == "Masses":
+                area = patchsize*patchsize*1e6 # patchsize in pc^2
+                surfacedensity = sum(tmp)*1e10/area
+              elif Profiles[l][1] == "StarFormationRate":
+                area = patchsize*patchsize # patchsize in kpc^2
+                surfacedensity = sum(tmp)/area
+              SurfaceDensityProfile[k][l].append(surfacedensity)
 # %%
 Xrange = [-1, 3]
 NumBin = 20

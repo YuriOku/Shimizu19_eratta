@@ -13,39 +13,31 @@ H = 1 # height from galactic plane in kpc
 rlim = 10 # limit of radius
 kmsinkpcyr = 3.1536e7/3.085677581e16 # 1 km/sec in kpc/yr
 # timestep = np.linspace(0.01,0.8,80)
-time = 300 # number of snapshots in 0 -- 1 Gyr
+time = 99 # number of snapshots in 0 -- 1 Gyr
 binwidth = 100
 binwidthtemp = 0.25
 rootdirectory = "/home/oku/SimulationData/isogal"
 
 models = [
     # ["Osaka2019_isogal", "Osaka2019 (Shimizu+19)"],
-        #   , "geodome_model/geodome_original"\
-    # ["geodome_model/ver_19.11.1", "Geodesic dome model & Cioffi+ 1988"],
-    # ["geodome_model/OKU2020","Geodesic dome model & Athena fitting"],
-    # ["centroid_model/ver07271_NoMomCeiling","Centroid model & Athena fitting (alpha = 0)"],
-    # ["centroid_model/ver07272_nfb1","Centroid model & Athena fitting (nfb = 1)"],
-    # ["centroid_model/ver07272_SFE001","Centroid model & Athena fitting (SFE = 0.01)"],
-    # ["centroid_model/ver07311","Centroid model & Athena fitting (alpha = -1)"],
-    # ["centroid_model/ver07311_fdens-2","Centroid model & Athena fitting (alpha = -2)"],
-    # ["centroid_model/ver08041_alpha-1","Centroid model & Athena fitting (new, alpha = -1)"],
-    # ["centroid_model/ver08041_alpha-2","Centroid model & Athena fitting (new, alpha = -2)"],
-    # ["centroid_model/ver08041_NoThermal","Centroid model (alpha = -1)"],
-    # ["centroid_model/ver08191","Centroid model (alpha = -0.24)"],
-    # ["centroid_model/ver07272_CHEVALIER1974","Centroid model & Cioffi+ 1988"],
-    # ["centroid_model/ver09011_n1f2a0","Centroid model"],
-    # ["centroid_model/ver09011_n1f2a024","Centroid model (new, alpha = -0.24)"],
-    # ["centroid_model/ver09011_n1f2a050","Centroid model (new, alpha = -0.50)"],
-    # ["centroid_model/ver09011_n1f2a075","Centroid model (new, alpha = -0.75)"],
-    # ["centroid_model/ver09011_n1f2a1","Centroid model (new, alpha = -1.00)"],
-    # ["centroid_model/ver12151","Centroid"],
-    # ["ss_model/ver01051", "Spherical superbubble"],
-    # ["ss_model/ver01152", "Spherical superbubble"],
-    # ["ss_model/ver12211", "Spherical superbubble"],
-    # ["NoFB", "No feedback"],
-    ["ss_model/ver01193", "Spherical superbubble"],
-    ["Osaka19", "Shimizu+ 19"],
-    # ["NoFB2", "No feedback"],
+    # ["ss_model/ver03311/fiducial", "fiducial", "red", "solid"],
+    # ["ss_model/ver03311/gashalo", "w. gashalo", "blue", "solid"],
+    # ["ss_model/ver03311/med", "high-reso", "red", "dot"],
+    # ["ss_model/ver03311/med_gashalo", "high-reso w. gashalo", "blue", "dot"],
+    # ["original/fiducial", "fiducial", "red", "solid"],
+    # ["original/gashalo", "w. gashalo", "blue", "solid"],
+    # ["original/med", "high-reso", "red", "dot"],
+    # ["original/med_gashalo", "high-reso w. gashalo", "blue", "dot"],
+    # ["ss_model/ver05031/fiducial", "fiducial", "red", "solid"],
+    # ["ss_model/ver05031/Boost2", "Boost 2", "red", "dash"],
+    # ["ss_model/ver05031/Boost4", "Boost 4", "red", "dot"],
+    ["ss_model/ver05061/fiducial", "fiducial", "blue", "solid"],
+    # ["ss_model/ver05061/strongESFB", "strong ESFB", "blue", "dash"],
+    # ["ss_model/ver05211/logT7.5", "logT7.5", "red", "solid"],
+    ["ss_model/ver05221/fiducial", "cummurative", "green", "solid"],
+    # ["ss_model/ver05221/gashalo", "entropy w. gashalo", "purple", "solid"],
+    ["ss_model/ver05291/fiducial", "stochastic", "purple", "dash"],
+    ["ss_model/ver06061/fiducial", "stochastic2", "purple", "solid"],
     ]
 # %%
 function W3(r, h)
@@ -74,6 +66,19 @@ function vmaximum(vel, galvel)
         end
     end
     return vmax
+end
+function getcenter(sph)
+    x = y = z = mtot = 0
+    for i in 1:length(sph.mass)
+      x += sph.mass[i] * sph.pos[1, i]
+      y += sph.mass[i] * sph.pos[2, i]
+      z += sph.mass[i] * sph.pos[3, i]
+      mtot += sph.mass[i]
+    end
+    x /= mtot
+    y /= mtot
+    z /= mtot
+    return [x, y, z]
 end
 function main(H, sph, galaxy)
     vmax = vmaximum(sph.vel, galaxy.vel[3,1])
@@ -165,7 +170,7 @@ struct Sph
 end
 struct Galaxy
     pos::Array{Float32, 1}
-    vel::Array{Float32, 2}
+    vel::Array{Float32, 1}
     sfr::Float32
     stellarmass::Float32
 end
@@ -198,15 +203,20 @@ for i in 1:length(models)
             global massstars = read(fp, "PartType4/Masses")
             global sph = Sph(pos, vel, hsml, mass, rho, temp, u)
         end
-        h5open(path2subfind, "r") do gp
-            # galpos = read(gp,"Group/GroupPos")
-            galpos = center(sph)
-            # galvel = read(gp,"Subhalo/SubhaloVel")
-            galvel = Float32[0.0 0.0; 0.0 0.0; 0.0 0.0]
-            galsfr = sum(sfr)
-            stellarmass = sum(massstars)
-            global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
-        end
+        galpos = getcenter(sph)
+        galvel = [0., 0., 0.]
+        galsfr = sum(sfr)
+        stellarmass = sum(massstars)
+        global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
+        # h5open(path2subfind, "r") do gp
+        #     # galpos = read(gp,"Group/GroupPos")
+        #     galpos = center(sph)
+        #     # galvel = read(gp,"Subhalo/SubhaloVel")
+        #     galvel = Float32[0.0 0.0; 0.0 0.0; 0.0 0.0]
+        #     galsfr = sum(sfr)
+        #     stellarmass = sum(massstars)
+        #     global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
+        # end
         results = main(H, sph, galaxy)
         Xaxisvel[i][j] = results[1]
         MassOutFlowRatevel[i][j] = results[2]
@@ -258,60 +268,60 @@ X = 0.01:0.01:time*0.01
 # Plots.plot(Xmaxvel, Yeffvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
 Plots.scalefontsizes(1.2)
 
-Plots.plot(legend=:bottomright, ylim=(10,2000), yscale=:log10)
-for i in 1:length(models)
-Plots.plot!(X, OutFlowVelocityMax[i], label=models[i][2])
-end
-Plots.savefig("results/OutFlowVelocityMax.pdf")
+# Plots.plot(legend=:bottomright, ylim=(10,2000), yscale=:log10)
+# for i in 1:length(models)
+# Plots.plot!(X, OutFlowVelocityMax[i], label=models[i][2])
+# end
+# Plots.savefig("results/OutFlowVelocityMax.pdf")
 
-Plots.plot(X, OutFlowVelocityEff)
-Plots.savefig("results/OutFlowVelocityEff.pdf")
+# Plots.plot(X, OutFlowVelocityEff)
+# Plots.savefig("results/OutFlowVelocityEff.pdf")
 
-Plots.plot(ylim=(1e-7,1e-1), yscale=:log10, xlim=(0,2e3))
-for i in 1:length(models)
-Plots.plot!(Xaxisvel[i][250], MassOutFlowRatevel[i][250], label=models[i][2])
-Plots.savefig("results/MassOutFlowVelocityHistgram.pdf")
-end
+# Plots.plot(ylim=(1e-7,1e-1), yscale=:log10, xlim=(0,2e3))
+# for i in 1:length(models)
+# Plots.plot!(Xaxisvel[i][250], MassOutFlowRatevel[i][250], label=models[i][2])
+# Plots.savefig("results/MassOutFlowVelocityHistgram.pdf")
+# end
 
-Plots.plot(ylim=(1e-4,1e1), yscale=:log10, xlim=(3,7), xlabel=latexstring("\$\\log (T\\,\\,[\\mathrm{K}])\$"), ylabel=latexstring("\$ dM_{\\mathrm{out}}/d\\log T\\,\\,[M_{\\odot} \\mathrm{yr}^{-1}]\$"))
+Plots.plot(ylim=(1e-4,1e2), yscale=:log10, xlim=(3,8), xlabel=latexstring("\$\\log (T\\,\\,[\\mathrm{K}])\$"), ylabel=latexstring("\$ dM_{\\mathrm{out}}/d\\log T\\,\\,[M_{\\odot} \\mathrm{yr}^{-1}]\$"))
 for i in 1:length(models)
-Plots.plot!(Xaxistemp[i][250], padding(MassOutFlowRatetemp[i][250]), label=models[i][2])
+Plots.plot!(Xaxistemp[i][99], padding(MassOutFlowRatetemp[i][99]), label=models[i][2])
 end
 Plots.savefig("results/MassOutFlowTemperatureHistgram.pdf")
 
-Plots.plot(ylabel="Mass outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e-1,2e1))
+Plots.plot(ylabel="Mass outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:topright, yscale=:log10, ylim=(1e-3,2e3))
 for i in 1:length(models)
-Plots.plot!(X, MassOutFlowRateTotal[i], label=models[i][2])
+Plots.plot!(X, MassOutFlowRateTotal[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/MassOutFlowRate.pdf")
-
-Plots.plot(ylabel="SFR [Msun/yr]", xlabel="Time [Gyr]", yscale=:log10, ylim=(1e-1,2e1))
+    
+Plots.plot(xlabel="Time [Gyr]", ylabel="Mass loading factor", legend=:topleft, yscale=:log10, ylim=(5e-4,1e3))
 for i in 1:length(models)
-Plots.plot!(X, SFR[i], label=models[i][2])
+Plots.plot!(X, MassLoadingFactor[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/MassLoadingFactor.pdf")
+
+
+Plots.plot(ylabel="Energy outflow rate [erg/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e44,1e49))
+for i in 1:length(models)
+Plots.plot!(X, EnergyOutFlowRate[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/EnergyOutFlowRate.pdf")
+
+Plots.plot(xlabel="Time [Gyr]", ylabel="Energy loading factor", legend=:topleft, yscale=:log10, ylim=(1e-6,2e0))
+for i in 1:length(models)
+Plots.plot!(X, EnergyLoadingFactor[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/EnergyLoadingFactor.pdf")
+
+Plots.plot(ylabel="SFR [Msun/yr]", xlabel="Time [Gyr]", ylim=(5e-1,1e1))
+for i in 1:length(models)
+Plots.plot!(X, SFR[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/SFR.pdf")
 
 Plots.plot()
 for i in 1:length(models)
-Plots.plot!(X, StellarMass[i], label=models[i][2])
+Plots.plot!(X, StellarMass[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/StellarMass.pdf")
-    
-Plots.plot(xlabel="Time [Gyr]", ylabel="Mass loading factor", legend=:topleft, yscale=:log10, ylim=(5e-2,2e1))
-for i in 1:length(models)
-Plots.plot!(X, MassLoadingFactor[i], label=models[i][2])
-end
-Plots.savefig("results/MassLoadingFactor.pdf")
-
-
-# Plots.plot(ylabel="Energy outflow rate [erg/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(0,1e53))
-# for i in 1:length(models)
-# Plots.plot!(X, EnergyOutFlowRate[i], label=models[i][2])
-# end
-# Plots.savefig("results/EnergyOutFlowRate.pdf")
-
-Plots.plot(xlabel="Time [Gyr]", ylabel="Energy loading factor", legend=:topleft, yscale=:log10, ylim=(1e-4,1e-1))
-for i in 1:length(models)
-Plots.plot!(X, EnergyLoadingFactor[i], label=models[i][2])
-end
-Plots.savefig("results/EnergyLoadingFactor.pdf")

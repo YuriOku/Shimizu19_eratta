@@ -48,9 +48,11 @@ models = [
     # ["ss_model/ver01193", "Spherical superbubble"],
     # ["ss_model/ver03221", "Spherical superbubble"],
     # ["ss_model/ver12211", "Spherical superbubble"],
-    ["ss_model/ver03311", "with cool-off"],
-    ["ss_model/ver03311_NoCoolOff", "without cool-off"],
+    # ["ss_model/ver03311", "with cool-off"],
+    # ["ss_model/ver03311/med", "high-reso"],
+    # ["ss_model/ver03311_NoCoolOff", "without cool-off"],
     # ["NoFB", "No feedback"],
+    ["ss_model/ver05291/fiducial", "high-reso"],
     ]
 # %%
 function W3(r, h)
@@ -200,7 +202,7 @@ using Plots
 gr()
 font = Plots.font(16)
 lfont = Plots.font(12)
-Plots.plot(legend=:bottomleft,xlim=(1e-4, 1), ylim=(1e-7, 1), xscale=:log10, yscale=:log10, xlabel=latexstring("\$\\Sigma_{\\mathrm{SFR}} [M_{\\odot} \\mathrm{kpc}^{-2} \\mathrm{yr}^{-1}]\$"), ylabel=L"\eta_{\rm E}", xtickfont=font, ytickfont=font, xlabelfont=font, ylabelfont=font, legendfont=lfont, guidefont=font, topmargin=3mm, bottommargin=3mm, rightmargin=3mm)
+Plots.plot(legend=:bottomleft,xlim=(1e-4, 1), ylim=(1e-7, 10), xscale=:log10, yscale=:log10, xlabel=latexstring("\$\\Sigma_{\\mathrm{SFR}} [M_{\\odot} \\mathrm{kpc}^{-2} \\mathrm{yr}^{-1}]\$"), ylabel=L"\eta_{\rm E}", xtickfont=font, ytickfont=font, xlabelfont=font, ylabelfont=font, legendfont=lfont, guidefont=font, topmargin=3mm, bottommargin=3mm, rightmargin=3mm)
 for i in 1:length(models)
 Plots.plot!(SigmaSFR[i], EnergyLoadingFactor[i][1], label="hot outflow (This work)", markersize=5, markercolor=:red, st=:scatter)
 Plots.plot!(SigmaSFR[i], EnergyLoadingFactor[i][2], label="cold outflow (This work)", markersize=5, markercolor=:blue, st=:scatter)
