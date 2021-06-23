@@ -13,10 +13,13 @@ H = 1 # height from galactic plane in kpc
 rlim = 10 # limit of radius
 kmsinkpcyr = 3.1536e7/3.085677581e16 # 1 km/sec in kpc/yr
 # timestep = np.linspace(0.01,0.8,80)
-time = 99 # number of snapshots in 0 -- 1 Gyr
-binwidth = 100
+time = 100 # number of snapshots in 0 -- 1 Gyr
+tempmin = 3
+tempmax = 8
 binwidthtemp = 0.25
 rootdirectory = "/home/oku/SimulationData/isogal"
+
+logT = tempmin:binwidthtemp:tempmax
 
 models = [
     # ["Osaka2019_isogal", "Osaka2019 (Shimizu+19)"],
@@ -31,13 +34,15 @@ models = [
     # ["ss_model/ver05031/fiducial", "fiducial", "red", "solid"],
     # ["ss_model/ver05031/Boost2", "Boost 2", "red", "dash"],
     # ["ss_model/ver05031/Boost4", "Boost 4", "red", "dot"],
-    ["ss_model/ver05061/fiducial", "fiducial", "blue", "solid"],
+    ["ss_model/ver05061/fiducial", "fiducial", "blue", "dot"],
     # ["ss_model/ver05061/strongESFB", "strong ESFB", "blue", "dash"],
     # ["ss_model/ver05211/logT7.5", "logT7.5", "red", "solid"],
-    ["ss_model/ver05221/fiducial", "cummurative", "green", "solid"],
+    # ["ss_model/ver05221/fiducial", "cummurative", "green", "solid"],
     # ["ss_model/ver05221/gashalo", "entropy w. gashalo", "purple", "solid"],
-    ["ss_model/ver05291/fiducial", "stochastic", "purple", "dash"],
-    ["ss_model/ver06061/fiducial", "stochastic2", "purple", "solid"],
+    # ["ss_model/ver05291/fiducial", "stochastic", "purple", "dash"],
+    ["ss_model/ver06061/fiducial", "Equal Weight", "red", "solid"],
+    ["ss_model/ver06181/fiducial", "Kernel Weight", "green", "solid"],
+    ["ss_model/ver06211/fiducial", "Voronoi Weight", "purple", "solid"],
     ]
 # %%
 function W3(r, h)
@@ -57,16 +62,6 @@ function crosssection(hsml, z)
     end
     return quadgk(integrand, 0, sqrt(hsml^2 - z^2))[1]
 end
-function vmaximum(vel, galvel)
-    vmax = 0.0
-    len = length(vel)/3
-    for i in 1:Int(len)
-        if abs(vel[3,i] - galvel) > vmax
-            vmax = abs(vel[3,i] - galvel)
-        end
-    end
-    return vmax
-end
 function getcenter(sph)
     x = y = z = mtot = 0
     for i in 1:length(sph.mass)
@@ -80,83 +75,51 @@ function getcenter(sph)
     z /= mtot
     return [x, y, z]
 end
+function getvelocity(sph)
+    x = y = z = mtot = 0
+    for i in 1:length(sph.mass)
+      x += sph.mass[i] * sph.vel[1, i]
+      y += sph.mass[i] * sph.vel[2, i]
+      z += sph.mass[i] * sph.vel[3, i]
+      mtot += sph.mass[i]
+    end
+    x /= mtot
+    y /= mtot
+    z /= mtot
+    return [x, y, z]
+end
 function main(H, sph, galaxy)
-    vmax = vmaximum(sph.vel, galaxy.vel[3,1])
-    numbin = ceil(vmax/binwidth)
-    mdotvel = zeros(Int(numbin))
-    binsvel = (binwidth/2):binwidth:(numbin-0.5)*binwidth
-    tmax = log10(maximum(sph.temp))
-    numbintemp = ceil(tmax/binwidthtemp)+10
-    mdottemp = zeros(Int(numbintemp))
-    binstemp = (binwidthtemp/2):binwidthtemp:(numbintemp-0.5)*binwidthtemp
-    totalmdot = 0.0
-    totaledot = 0.0
+    ret = Dict()
+    numbintemp = length(logT)
+    ret["dM/dlogT"] = zeros(Int(numbintemp))
+    ret["dM"] = 0.0
+    ret["dE"] = 0.0
+    ret["dMz"] = 0.0
     for i in 1:length(sph.mass)
         z = abs(sph.pos[3,i] - galaxy.pos[3,1])
         dz = abs(z - H)
         r = sqrt((sph.pos[1,i]-galaxy.pos[1,1])^2 + (sph.pos[2,i]-galaxy.pos[2,1])^2)
-        if dz < sph.hsml[i] && r < rlim ##&& sph.temp[i] > 1e5
-            v = abs(sph.vel[3,i] - galaxy.vel[3,1])
-            ibinvel = Int(ceil(v/binwidth))
-            if ibinvel == 0
-                ibinvel = 1
+        if dz < sph.hsml[i] && r < rlim
+            v = (sph.vel[3,i] - galaxy.vel[3,1])*(sph.pos[3,i] - galaxy.pos[3,1])/z
+            if v > 0
+                dM = sph.mass[i]*1e10*crosssection(sph.hsml[i], dz)*v*kmsinkpcyr
+                ret["dM"] += dM
+
+                energy = sph.mass[i]*(0.5*v^2 + sph.u[i])
+                dE = energy*2e53*crosssection(sph.hsml[i], dz)*v*kmsinkpcyr
+                ret["dE"] += dE
+
+                dMz = sph.Z[i]*dM
+                ret["dMz"] += dMz
+
+                if log10(sph.temp[i]) > tempmin && log10(sph.temp[i]) < tempmax
+                    ibintemp = Int(ceil((log10(sph.temp[i]) - tempmin)/binwidthtemp))
+                    ret["dM/dlogT"][ibintemp] += dM/binwidthtemp
+                end
             end
-            ibintemp = Int(ceil(log10(sph.temp[i])/binwidthtemp))
-            if ibintemp == 0
-                ibintemp = 1
-            end
-            outflow = sph.mass[i]*1e10*crosssection(sph.hsml[i], dz)*v*kmsinkpcyr
-            Energy = sph.mass[i]*(0.5*v^2 + sph.u[i])
-            energyoutflow = Energy*2e53*crosssection(sph.hsml[i], dz)*v*kmsinkpcyr
-            mdotvel[ibinvel] += outflow
-            mdottemp[ibintemp] += outflow/binwidthtemp
-            totalmdot += outflow
-            totaledot += energyoutflow
         end
     end
-    return (binsvel, mdotvel, totalmdot, binstemp, mdottemp, totaledot)
-end
-# function max95(bins, mdot, totalmdot)
-#     max95 = 0.95totalmdot
-#     sum = 0
-#     for i in 1:length(mdot)
-#         sum += mdot[i]
-#         if sum > max95
-#             global ret = bins[i]
-#             break
-#         end
-#     end
-#     return ret
-# end
-function maxandeff(bins, mdot, totalmdot)
-    veff = 0.0
-    vmax = 0.0
-    meff = 0.0
-    sum = 0.0
-    for i in 1:length(mdot)
-        if mdot[i] > meff
-            meff = mdot[i]
-            veff = bins[i]
-        end
-    end
-    for i in 1:length(mdot)
-        sum += mdot[i]
-        if sum > 0.95*totalmdot
-            vmax = bins[i]
-            break
-        end
-    end
-    return (vmax, veff)
-end
-function center(sph)
-    ret = zeros(3)
-    totalmass = sum(sph.mass)
-    for i in 1:length(sph.mass)
-        ret[1] += sph.pos[1,i]*sph.mass[i]
-        ret[2] += sph.pos[2,i]*sph.mass[i]
-        ret[3] += sph.pos[3,i]*sph.mass[i]
-    end
-    ret = ret./totalmass
+    ret["Z"] = ret["dMz"]/ret["dM"]
     return ret
 end
 struct Sph
@@ -167,6 +130,7 @@ struct Sph
     rho::Array{Float32, 1}
     temp::Array{Float32, 1}
     u::Array{Float32, 1}
+    Z::Array{Float32, 1}
 end
 struct Galaxy
     pos::Array{Float32, 1}
@@ -175,22 +139,23 @@ struct Galaxy
     stellarmass::Float32
 end
 # %%
-Xaxisvel = [[[] for j in 1:time] for i in 1:length(models)]
-MassOutFlowRatevel = [[[] for j in 1:time] for i in 1:length(models)]
-Xaxistemp = [[[] for j in 1:time] for i in 1:length(models)]
-MassOutFlowRatetemp = [[[] for j in 1:time] for i in 1:length(models)]
-MassOutFlowRateTotal = [[0.0 for j in 1:time] for i in 1:length(models)]
-MassLoadingFactor = [[0.0 for j in 1:time] for i in 1:length(models)]
-OutFlowVelocityMax = [[0.0 for j in 1:time] for i in 1:length(models)]
-OutFlowVelocityEff = [[0.0 for j in 1:time] for i in 1:length(models)]
-EnergyOutFlowRate  = [[0.0 for j in 1:time] for i in 1:length(models)]
-EnergyLoadingFactor  = [[0.0 for j in 1:time] for i in 1:length(models)]
-SFR = [[0.0 for j in 1:time] for i in 1:length(models)]
-StellarMass = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results = Dict()
+Results["dM"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["dE"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["dMz"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["Z"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["dM/dlogT"] = [[[] for j in 1:time] for i in 1:length(models)]
+Results["MassLoadingFactor"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["EnergyLoadingFactor"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["MetalLoadingFactor"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["SFR"] = [[0.0 for j in 1:time] for i in 1:length(models)]
+Results["StellarMass"] = [[0.0 for j in 1:time] for i in 1:length(models)]
 for i in 1:length(models)
     @time for j in 1:time
         path2snapshot = @sprintf("%s/%s/snapshot_%03d/snapshot_%03d.hdf5", rootdirectory, models[i][1], j, j) 
         path2subfind = @sprintf("%s/%s/snapshot_%03d/groups_%03d/sub_%03d.hdf5", rootdirectory, models[i][1], j, j, j)
+        sfr = 0.0
+        massstars = 0.0
         h5open(path2snapshot, "r") do fp
             pos = read(fp,"PartType0/Coordinates")
             vel = read(fp,"PartType0/Velocities")
@@ -199,46 +164,26 @@ for i in 1:length(models)
             rho = read(fp, "PartType0/Density")
             temp = read(fp, "PartType0/Temperature")
             u = read(fp, "PartType0/InternalEnergy")
-            global sfr = read(fp, "PartType0/StarFormationRate")
-            global massstars = read(fp, "PartType4/Masses")
-            global sph = Sph(pos, vel, hsml, mass, rho, temp, u)
+            Z = read(fp, "PartType0/MetallicitySmoothed")
+            sfr = read(fp, "PartType0/StarFormationRate")
+            massstars = read(fp, "PartType4/Masses")
+            global sph = Sph(pos, vel, hsml, mass, rho, temp, u, Z)
         end
         galpos = getcenter(sph)
-        galvel = [0., 0., 0.]
+        galvel = getvelocity(sph)
         galsfr = sum(sfr)
         stellarmass = sum(massstars)
         global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
-        # h5open(path2subfind, "r") do gp
-        #     # galpos = read(gp,"Group/GroupPos")
-        #     galpos = center(sph)
-        #     # galvel = read(gp,"Subhalo/SubhaloVel")
-        #     galvel = Float32[0.0 0.0; 0.0 0.0; 0.0 0.0]
-        #     galsfr = sum(sfr)
-        #     stellarmass = sum(massstars)
-        #     global galaxy = Galaxy(galpos, galvel, galsfr, stellarmass)
-        # end
-        results = main(H, sph, galaxy)
-        Xaxisvel[i][j] = results[1]
-        MassOutFlowRatevel[i][j] = results[2]
-        MassOutFlowRateTotal[i][j] = results[3]
-        Xaxistemp[i][j] = results[4]
-        MassOutFlowRatetemp[i][j] = results[5]
-        EnergyOutFlowRate[i][j] = results[6]
-        (OutFlowVelocityMax[i][j], OutFlowVelocityEff[i][j]) = maxandeff(results[1], results[2], results[3])
-        SFR[i][j] = galaxy.sfr
-        StellarMass[i][j] = galaxy.stellarmass
-        MassLoadingFactor[i][j] = results[3]/galaxy.sfr
-        EnergyLoadingFactor[i][j] = (results[6]/1e51)/(galaxy.sfr/1e2)
+        ret = main(H, sph, galaxy)
+        for k in collect(keys(ret))
+            Results[k][i][j] = ret[k]
+        end
+        Results["SFR"][i][j] = galaxy.sfr
+        Results["StellarMass"][i][j] = galaxy.stellarmass
+        Results["MassLoadingFactor"][i][j] = ret["dM"]/galaxy.sfr
+        Results["EnergyLoadingFactor"][i][j] = ret["dE"]/(1e49 * galaxy.sfr)
+        Results["MetalLoadingFactor"][i][j] = ret["dMz"]/(1e-2 * galaxy.sfr)
     end
-end
-function averageoutflowvelocity(velocity, totalmassoutflow)
-    ret = 0.0; total = 0.0
-    for i in 1:length(velocity)
-        ret += velocity[i]*totalmassoutflow[i]
-        total += totalmassoutflow[i]
-    end
-    println(total)
-    return ret/total
 end
 function padding(array)
     ret = []
@@ -248,80 +193,84 @@ function padding(array)
     end
     return ret
 end
-Xmaxvel = zeros(length(models))
-Ymaxvel = zeros(length(models))
-Yeffvel = zeros(length(models))
-for i in 1:length(models)
-    println(models[i][2]," max:", averageoutflowvelocity(OutFlowVelocityMax[i], MassOutFlowRateTotal[i]))
-    Xmaxvel[i] = i
-    Ymaxvel[i] = averageoutflowvelocity(OutFlowVelocityMax[i], MassOutFlowRateTotal[i])
-    println(models[i][2]," eff:", averageoutflowvelocity(OutFlowVelocityEff[i], MassOutFlowRateTotal[i]))
-    Yeffvel[i] = averageoutflowvelocity(OutFlowVelocityEff[i], MassOutFlowRateTotal[i])
+function timeaverage(Results)
+    dMdlogT = [[0.0 for j in 1:length(logT)] for i in 1:length(models)]
+    for i in 1:length(models)
+        for j in 1:length(logT)
+            for k in 1:time
+                dMdlogT[i][j] += Results["dM/dlogT"][i][k][j]/time
+            end
+        end
+    end
+    return dMdlogT
 end
+
 # %%
 using Plots
 gr()
 
 X = 0.01:0.01:time*0.01
 
-# Plots.plot(Xmaxvel, Ymaxvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
-# Plots.plot(Xmaxvel, Yeffvel, legend=:bottomright, ylim=(10^2.2,10^3.2), yscale=:log10)
 Plots.scalefontsizes(1.2)
 
-# Plots.plot(legend=:bottomright, ylim=(10,2000), yscale=:log10)
-# for i in 1:length(models)
-# Plots.plot!(X, OutFlowVelocityMax[i], label=models[i][2])
-# end
-# Plots.savefig("results/OutFlowVelocityMax.pdf")
-
-# Plots.plot(X, OutFlowVelocityEff)
-# Plots.savefig("results/OutFlowVelocityEff.pdf")
-
-# Plots.plot(ylim=(1e-7,1e-1), yscale=:log10, xlim=(0,2e3))
-# for i in 1:length(models)
-# Plots.plot!(Xaxisvel[i][250], MassOutFlowRatevel[i][250], label=models[i][2])
-# Plots.savefig("results/MassOutFlowVelocityHistgram.pdf")
-# end
-
+dMdlogT = timeaverage(Results)
 Plots.plot(ylim=(1e-4,1e2), yscale=:log10, xlim=(3,8), xlabel=latexstring("\$\\log (T\\,\\,[\\mathrm{K}])\$"), ylabel=latexstring("\$ dM_{\\mathrm{out}}/d\\log T\\,\\,[M_{\\odot} \\mathrm{yr}^{-1}]\$"))
 for i in 1:length(models)
-Plots.plot!(Xaxistemp[i][99], padding(MassOutFlowRatetemp[i][99]), label=models[i][2])
+Plots.plot!(logT, padding(dMdlogT[i]), label=models[i][2])
 end
 Plots.savefig("results/MassOutFlowTemperatureHistgram.pdf")
 
 Plots.plot(ylabel="Mass outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:topright, yscale=:log10, ylim=(1e-3,2e3))
 for i in 1:length(models)
-Plots.plot!(X, MassOutFlowRateTotal[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(X, Results["dM"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/MassOutFlowRate.pdf")
     
 Plots.plot(xlabel="Time [Gyr]", ylabel="Mass loading factor", legend=:topleft, yscale=:log10, ylim=(5e-4,1e3))
 for i in 1:length(models)
-Plots.plot!(X, MassLoadingFactor[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(X, Results["MassLoadingFactor"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/MassLoadingFactor.pdf")
 
 
 Plots.plot(ylabel="Energy outflow rate [erg/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e44,1e49))
 for i in 1:length(models)
-Plots.plot!(X, EnergyOutFlowRate[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(X, Results["dE"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/EnergyOutFlowRate.pdf")
 
 Plots.plot(xlabel="Time [Gyr]", ylabel="Energy loading factor", legend=:topleft, yscale=:log10, ylim=(1e-6,2e0))
 for i in 1:length(models)
-Plots.plot!(X, EnergyLoadingFactor[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(X, Results["EnergyLoadingFactor"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/EnergyLoadingFactor.pdf")
 
+Plots.plot(ylabel="Metal outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e-7, 2e1))
+for i in 1:length(models)
+Plots.plot!(X, Results["dMz"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/MetalOutFlowRate.pdf")
+
+Plots.plot(xlabel="Time [Gyr]", ylabel="Metal loading factor", legend=:topleft, yscale=:log10, ylim=(1e-6,2e0))
+for i in 1:length(models)
+Plots.plot!(X, Results["MetalLoadingFactor"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/Metallicity.pdf")
+
+Plots.plot(xlabel="Time [Gyr]", ylabel="Metallicity", legend=:topleft, yscale=:log10, ylim=(1e-6,1))
+for i in 1:length(models)
+Plots.plot!(X, Results["Z"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/MetalLoadingFactor.pdf")
+
 Plots.plot(ylabel="SFR [Msun/yr]", xlabel="Time [Gyr]", ylim=(5e-1,1e1))
 for i in 1:length(models)
-Plots.plot!(X, SFR[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(X, Results["SFR"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/SFR.pdf")
 
 Plots.plot()
 for i in 1:length(models)
-Plots.plot!(X, StellarMass[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(X, Results["StellarMass"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/StellarMass.pdf")
