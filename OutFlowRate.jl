@@ -245,23 +245,23 @@ Plots.plot!(X, Results["EnergyLoadingFactor"][i], label=models[i][2], linecolor=
 end
 Plots.savefig("results/EnergyLoadingFactor.pdf")
 
-Plots.plot(ylabel="Metal outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e-7, 2e1))
+Plots.plot(ylabel="Metal mass outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e-7, 2e1))
 for i in 1:length(models)
 Plots.plot!(X, Results["dMz"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
 Plots.savefig("results/MetalOutFlowRate.pdf")
 
-Plots.plot(xlabel="Time [Gyr]", ylabel="Metal loading factor", legend=:topleft, yscale=:log10, ylim=(1e-6,2e0))
+Plots.plot(xlabel="Time [Gyr]", ylabel="Metal loading factor", legend=:topleft, yscale=:log10, ylim=(1e-3,1e1))
 for i in 1:length(models)
 Plots.plot!(X, Results["MetalLoadingFactor"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/Metallicity.pdf")
+Plots.savefig("results/MetalLoadingFactor.pdf")
 
-Plots.plot(xlabel="Time [Gyr]", ylabel="Metallicity", legend=:topleft, yscale=:log10, ylim=(1e-6,1))
+Plots.plot(xlabel="Time [Gyr]", ylabel="Metallicity", legend=:topleft, yscale=:log10, ylim=(1e-3,1e-1))
 for i in 1:length(models)
 Plots.plot!(X, Results["Z"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/MetalLoadingFactor.pdf")
+Plots.savefig("results/Metallicity.pdf")
 
 Plots.plot(ylabel="SFR [Msun/yr]", xlabel="Time [Gyr]", ylim=(5e-1,1e1))
 for i in 1:length(models)
