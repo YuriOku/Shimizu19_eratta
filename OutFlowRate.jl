@@ -4,20 +4,24 @@
 using HDF5
 using Plots
 using GR
-using QuadGK
+# using QuadGK
 using Printf
 using LaTeXStrings
+using Statistics
 ENV["GKSwstype"] = "100"
 # %%
-Hmax = 10 # maximum height from galactic plane in kpc
-Hstep = 0.5
-rlim = 50 # limit of radius
+mode = "plane" # "plane" or "spherical".
+Hmax = 1 # maximum height from galactic plane in kpc
+Hstep = 1
+rlim = 10 # limit of radius (active only plane mode)
 kmsinkpcyr = 3.1536e7/3.085677581e16 # 1 km/sec in kpc/yr
 # timestep = np.linspace(0.01,0.8,80)
-time = 50 # number of snapshots in 0 -- 1 Gyr
+time = 100 # number of snapshots
+tave = 50 # minimun snapshot number to use for calculating time average
+snapinterval = 0.01 # interval of snapshot in Gyr
 binwidthtemp = 0.15
 rootdirectory = "/home/oku/SimulationData/isogal"
-tempmin = 3
+tempmin = 2
 tempmax = 8
 hotmin = 5 # Temperature to divide gas to Cold and Hot component
 
@@ -25,63 +29,64 @@ H = Hstep:Hstep:Hmax
 logT = tempmin:binwidthtemp:tempmax
 
 models = [
-    # ["Osaka2019_isogal", "Osaka2019 (Shimizu+19)"],
-    # ["ss_model/ver03311/fiducial", "fiducial", "red", "solid"],
-    # ["ss_model/ver03311/gashalo", "w. gashalo", "blue", "solid"],
-    # ["ss_model/ver03311/med", "high-reso", "red", "dot"],
-    # ["ss_model/ver03311/med_gashalo", "high-reso w. gashalo", "blue", "dot"],
-    # ["original/fiducial", "Shimizu+19", "red", "solid"],
-    # ["original/gashalo", "w. gashalo", "blue", "solid"],
-    # ["original/med", "high-reso", "red", "dot"],
-    # ["original/med_gashalo", "high-reso w. gashalo", "blue", "dot"],
-    # ["ss_model/ver05031/fiducial", "fiducial", "red", "solid"],
-    # ["ss_model/ver05031/Boost2", "Boost 2", "red", "dash"],
-    # ["ss_model/ver05031/Boost4", "Boost 4", "red", "dot"],
-    # ["ss_model/ver05061/fiducial", "fiducial", "blue", "dot"],
-    # ["ss_model/ver05061/strongESFB", "strong ESFB", "blue", "dash"],
-    # ["ss_model/ver05211/logT7.5", "logT7.5", "red", "solid"],
-    # ["ss_model/ver05221/fiducial", "cummurative", "green", "solid"],
-    # ["ss_model/ver05221/gashalo", "entropy w. gashalo", "purple", "solid"],
-    # ["ss_model/ver05291/fiducial", "stochastic", "purple", "dash"],
-    # ["ss_model/ver06061/fiducial", "Equal Weight", "red", "solid"],
-    # ["ss_model/ver06181/fiducial", "Kernel Weight", "green", "solid"],
-    # ["ss_model/ver07081/fiducial", "Voronoi Weight", "purple", "solid"],
-    ["ss_model/ver07081/gashalo", "Voronoi Weight gashalo", "purple", "dash"],
-    # ["ss_model/ver07081/med", "Voronoi Weight med", "green", "solid"],
-    ["ss_model/ver07081/med_gashalo", "Voronoi Weight med gashalo", "green", "dash"],
-    # ["ss_model/ver06211/med_K30T0", "Voronoi Weight med_K30T0", "purple", "dot"],
-    ]
+    # ["ss_model/ver07231/fiducial", "Fiducial", "green", "solid"],
+    # ["ss_model/ver07231/notstochastic", "Not stochastic", "blue", "dash"],
+    # ["ss_model/ver07231/thermal", "Thermal", "red", "dot"],
+    # ["ss_model/ver07231/noFB", "No FB", "purple", "dashdot"],
+    # ["ss_model/ver07231/med", "High-reso", "cyan", "dash"],
+    # ["original/gashalo", "Osaka", "black", "dashdotdot"],
+    
+    ["ss_model/ver07231/NoHalo/fiducial", "Fiducial", "green", "solid"],
+    ["ss_model/ver07231/NoHalo/notstochastic", "Not stochastic", "blue", "dash"],
+    ["ss_model/ver07231/NoHalo/thermal", "Thermal", "red", "dot"],
+    ["ss_model/ver07231/NoHalo/noFB", "No FB", "purple", "dashdot"],
+        ]
 # %%
-function W3(r, h)
-  r = abs(r)/h
-  C = 8/h^3/pi
-  if r > 1
-      return 0
-  elseif r > 1/2
-      return C*2*(1-r)^3
-  else
-      return C*(1 - 6*r^2 + 6*r^3)
-  end
-end
-function W5(r, h)
-    r =abs(r)/h
-    C = 3^9/359/pi/h^3
+# function W3(r, h)
+#   r = abs(r)/h
+#   C = 8/h^3/pi
+#   if r > 1
+#       return 0
+#   elseif r > 1/2
+#       return C*2*(1-r)^3
+#   else
+#       return C*(1 - 6*r^2 + 6*r^3)
+#   end
+# end
+# function W5(r, h)
+#     r =abs(r)/h
+#     C = 3^9/359/pi/h^3
+#     if r > 1
+#         return 0
+#     elseif r > 2/3
+#         return C*(1 - r)^5
+#     elseif r > 1/3
+#         return C*((1 - r)^5 - 6*(2/3 - r)^5)
+#     else
+#         return C*((1 - r)^5 - 6*(2/3 - r)^5 + 15*(1/3 - r)^5)
+#     end
+# end
+function crosssection(hsml, z)
+    # function integrand(x)
+    #     return W5(sqrt(z^2 + x^2),hsml)*2*pi*x
+    #     # return W3(sqrt(z^2 + x^2),hsml)*2*pi*x
+    # end
+    # return quadgk(integrand, 0, sqrt(hsml^2 - z^2))[1]
+    y = abs(z)
+    C = 3^9/359/pi/hsml^3
+    function f(a, b)
+        return a*pi*hsml*C*(b - y/hsml)^6 * (y + hsml*(b - y/hsml)/7)
+    end
+    r = y/hsml
     if r > 1
         return 0
     elseif r > 2/3
-        return C*(1 - r)^5
+        return f(1/3, 1)
     elseif r > 1/3
-        return C*((1 - r)^5 - 6*(2/3 - r)^5)
+        return f(1/3, 1) + f(-2, 2/3)
     else
-        return C*((1 - r)^5 - 6*(2/3 - r)^5 + 15*(1/3 - r)^5)
+        return f(1/3, 1) + f(-2, 2/3) + f(5, 1/3)
     end
-end
-function crosssection(hsml, z)
-    function integrand(x)
-        return W5(sqrt(z^2 + x^2),hsml)*2*pi*x
-        # return W3(sqrt(z^2 + x^2),hsml)*2*pi*x
-    end
-    return quadgk(integrand, 0, sqrt(hsml^2 - z^2))[1]
 end
 function getcenter(sph)
     x = y = z = mtot = 0
@@ -118,22 +123,47 @@ function padding(array)
     return ret
 end
 function timeaverage_dMdlogT(Results, h)
-    dMdlogT = [[0.0 for j in 1:length(logT)] for i in 1:length(models)]
+    dMdlogT = Dict()
+    dMdlogT["mean"] = [[0.0 for j in 1:length(logT)] for i in 1:length(models)]
+    dMdlogT["std"] = [[0.0 for j in 1:length(logT)] for i in 1:length(models)]
     for i in 1:length(models)
         for j in 1:length(logT)
-            for k in 1:time
-                dMdlogT[i][j] += Results["dM/dlogT"][i][h][k][j]/time
+            tmp = Array{Float32, 1}(undef, 0)
+            for k in tave:time
+                val = Results["dM/dlogT"][i][h][k][j]
+                if val > 0
+                    push!(tmp, log10(val))
+                end
+            end
+            if length(tmp) > 0
+                dMdlogT["mean"][i][j] = Statistics.mean(tmp)
+                dMdlogT["std"][i][j] = Statistics.std(tmp, corrected=false)
+            else
+                dMdlogT["mean"][i][j] = -Inf
+                dMdlogT["std"][i][j] = 0
             end
         end
     end
     return dMdlogT
 end
 function timeaverage_height(Results, key)
-    ret = [[0.0 for j in 1:length(H)] for i in 1:length(models)]
+    ret = Dict()
+    ret["mean"] = [Array{Float32, 1}(undef, 0) for i in 1:length(models)]
+    ret["std"] = [Array{Float32, 1}(undef, 0) for i in 1:length(models)]
+    ret["H"] = [Array{Float32, 1}(undef, 0) for i in 1:length(models)]
     for i in 1:length(models)
         for j in 1:length(H)
-            for k in 1:time
-                ret[i][j] += Results[key][i][j][k]/time
+            tmp = Array{Float32, 1}(undef, 0)
+            for k in tave:time
+                val = Results[key][i][j][k]
+                if val > 0
+                    push!(tmp, log10(val))
+                end
+            end
+            if length(tmp) > 0
+                push!(ret["mean"][i], Statistics.mean(tmp))
+                push!(ret["std"][i], Statistics.std(tmp, corrected=false))
+                push!(ret["H"][i], H[j])
             end
         end
     end
@@ -174,11 +204,35 @@ function main(H, sph, galaxy)
     MSCold = 0.0
     MSHot = 0.0
     for i in 1:length(sph.mass)
-        z = abs(sph.pos[3,i] - galaxy.pos[3,1])
-        dz = abs(z - H)
-        r = sqrt((sph.pos[1,i]-galaxy.pos[1,1])^2 + (sph.pos[2,i]-galaxy.pos[2,1])^2)
-        if dz < sph.hsml[i] && r < rlim #&& sph.temp[i] > Trange[1] && sph.temp[i] < Trange[2]
-            v = (sph.vel[3,i] - galaxy.vel[3,1])*(sph.pos[3,i] - galaxy.pos[3,1])/z
+        # initialization
+        dz = sph.hsml[i] + 1.0
+        z = 0
+
+        if mode == "plane"
+            z = abs(sph.pos[3,i] - galaxy.pos[3,1])
+            dz = abs(z - H)
+            r = sqrt((sph.pos[1,i]-galaxy.pos[1,1])^2 + (sph.pos[2,i]-galaxy.pos[2,1])^2)
+            if r > rlim
+                continue
+            end
+        elseif mode == "spherical"
+            z = sqrt((sph.pos[1,i]-galaxy.pos[1,1])^2 + (sph.pos[2,i]-galaxy.pos[2,1])^2 + (sph.pos[3,i]-galaxy.pos[3,1])^2)
+            dz = abs(z - H)
+        else
+            print("set mode plane or spherical")
+            break
+        end
+
+        if dz < sph.hsml[i]
+            v = -1 #initialization.
+            if mode == "plane"
+                v = (sph.vel[3,i] - galaxy.vel[3,1])*(sph.pos[3,i] - galaxy.pos[3,1])/z
+            elseif mode == "spherical"
+                v = 
+                 ((sph.vel[1,i]-galaxy.vel[1,1])*(sph.pos[1,i]-galaxy.pos[1,1]) 
+                + (sph.vel[2,i]-galaxy.vel[2,1])*(sph.pos[2,i]-galaxy.pos[2,1]) 
+                + (sph.vel[3,i]-galaxy.vel[3,1])*(sph.pos[3,i]-galaxy.pos[3,1]))/z
+            end
             if v > 0
                 S = crosssection(sph.hsml[i], dz)
 
@@ -189,7 +243,7 @@ function main(H, sph, galaxy)
                 MS += dMS
 
                 energy = sph.mass[i]*(0.5*v^2 + sph.u[i])
-                dE = energy*2e53*S*v*kmsinkpcyr
+                dE = energy*2e53*S*v*kmsinkpcyr # 2e53 is a conversion factor from 10^10 Msun km^2 s^-2 to erg
                 ret["dE"] += dE
 
                 dMz = sph.Z[i]*dM
@@ -255,8 +309,10 @@ Results["MetalLoadingFactorHot"] = [[[0.0 for k in 1:time] for j in 1:length(H)]
 Results["VHot"] = [[[0.0 for k in 1:time] for j in 1:length(H)] for i in 1:length(models)]
 
 Results["dM/dlogT"] = [[[[] for k in 1:time] for j in 1:length(H)] for i in 1:length(models)]
-Results["SFR"] = [[[0.0 for k in 1:time] for j in 1:length(H)] for i in 1:length(models)]
-Results["StellarMass"] = [[[0.0 for k in 1:time] for j in 1:length(H)] for i in 1:length(models)]
+
+Results["SFR"] = [[0.0 for k in 1:time] for i in 1:length(models)]
+Results["StellarMass"] = [[0.0 for k in 1:time] for i in 1:length(models)]
+Results["MetalMass"] = [[0.0 for k in 1:time] for i in 1:length(models)]
 for i in 1:length(models)
     @time for j in 1:time
         ## load data
@@ -291,8 +347,6 @@ for i in 1:length(models)
             for l in collect(keys(ret))
                 Results[l][i][k][j] = ret[l]
             end
-            Results["SFR"][i][k][j] = galaxy.sfr
-            Results["StellarMass"][i][k][j] = galaxy.stellarmass
 
             Results["MassLoadingFactor"][i][k][j] = ret["dM"]/galaxy.sfr
             Results["EnergyLoadingFactor"][i][k][j] = ret["dE"]/(1e49 * galaxy.sfr)
@@ -306,6 +360,11 @@ for i in 1:length(models)
             Results["EnergyLoadingFactorHot"][i][k][j] = ret["dEHot"]/(1e49 * galaxy.sfr)
             Results["MetalLoadingFactorHot"][i][k][j] = ret["dMzHot"]/(1e-2 * galaxy.sfr)
         end
+        Results["SFR"][i][j] = galaxy.sfr
+        Results["StellarMass"][i][j] = galaxy.stellarmass
+        for k in 1:length(sph.mass)
+            Results["MetalMass"][i][j] += sph.mass[k]*sph.Z[k]
+        end 
     end
 end
 
@@ -313,119 +372,162 @@ end
 using Plots
 gr()
 
-X = 0.01:0.01:time*0.01
+X = snapinterval:snapinterval:time*snapinterval
 
 Plots.scalefontsizes(1.2)
 
-h = 8
+# galaxy properties
+Plots.plot(ylabel="SFR [Msun/yr]", xlabel="Time [Gyr]", ylim=(0,16))
+for i in 1:length(models)
+Plots.plot!(X, Results["SFR"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/SFR.png")
+
+Plots.plot()
+for i in 1:length(models)
+Plots.plot!(X, Results["StellarMass"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/StellarMass.png")
+
+Plots.plot()
+for i in 1:length(models)
+Plots.plot!(X, Results["MetalMass"][i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+end
+Plots.savefig("results/MetalMass.png")
+
+h = 1
 x = H[h]
 print("properties at H = $x\n")
 dMdlogT = timeaverage_dMdlogT(Results, h)
-Plots.plot(ylim=(1e-4,1e2), yscale=:log10, xlim=(3,8), xlabel=latexstring("\$\\log (T\\,\\,[\\mathrm{K}])\$"), ylabel=latexstring("\$ dM_{\\mathrm{out}}/d\\log T\\,\\,[M_{\\odot} \\mathrm{yr}^{-1}]\$"))
+Plots.plot(ylim=(-4,2), xlim=(2,8), xlabel=latexstring("\$\\log\\,(T\\,\\,[\\mathrm{K}])\$"), ylabel=latexstring("\$\\log\\,(d\\dot{M}_{\\mathrm{out}}/d\\log T\\,\\,[M_{\\odot} \\mathrm{yr}^{-1} \\mathrm{dex}^{-1}])\$"))
 for i in 1:length(models)
-Plots.plot!(logT, padding(dMdlogT[i]), label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+Plots.plot!(logT, dMdlogT["mean"][i], label=models[i][2], color=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), ribbon=dMdlogT["std"][i], fillalpha=.3)
 end
-Plots.savefig("results/dMdlogT.pdf")
+Plots.savefig("results/dMdlogT.png")
 
+# time evolution of outflow properties
 Plots.plot(ylabel="Mass outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:topright, yscale=:log10, ylim=(1e-3,2e3))
 for i in 1:length(models)
 Plots.plot!(X, Results["dM"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/MassOutFlowRate.pdf")
+Plots.savefig("results/MassOutFlowRate.png")
     
 Plots.plot(xlabel="Time [Gyr]", ylabel="Mass loading factor", legend=:topleft, yscale=:log10, ylim=(5e-4,1e3))
 for i in 1:length(models)
 Plots.plot!(X, Results["MassLoadingFactor"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/MassLoadingFactor.pdf")
+Plots.savefig("results/MassLoadingFactor.png")
 
 
 Plots.plot(ylabel="Energy outflow rate [erg/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e44,1e49))
 for i in 1:length(models)
 Plots.plot!(X, Results["dE"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/EnergyOutFlowRate.pdf")
+Plots.savefig("results/EnergyOutFlowRate.png")
 
 Plots.plot(xlabel="Time [Gyr]", ylabel="Energy loading factor", legend=:topleft, yscale=:log10, ylim=(1e-6,2e0))
 for i in 1:length(models)
 Plots.plot!(X, Results["EnergyLoadingFactor"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/EnergyLoadingFactor.pdf")
+Plots.savefig("results/EnergyLoadingFactor.png")
 
 Plots.plot(ylabel="Metal mass outflow rate [Msun/yr]", xlabel="Time [Gyr]",legend=:bottomright, yscale=:log10, ylim=(1e-7, 2e1))
 for i in 1:length(models)
 Plots.plot!(X, Results["dMz"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/MetalOutFlowRate.pdf")
+Plots.savefig("results/MetalOutFlowRate.png")
 
 Plots.plot(xlabel="Time [Gyr]", ylabel="Metal loading factor", legend=:topleft, yscale=:log10, ylim=(1e-3,1e1))
 for i in 1:length(models)
 Plots.plot!(X, Results["MetalLoadingFactor"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/MetalLoadingFactor.pdf")
+Plots.savefig("results/MetalLoadingFactor.png")
 
 Plots.plot(xlabel="Time [Gyr]", ylabel="Metallicity", legend=:topleft, yscale=:log10, ylim=(1e-3,1e-1))
 for i in 1:length(models)
 Plots.plot!(X, Results["Z"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
 end
-Plots.savefig("results/Metallicity.pdf")
+Plots.savefig("results/Metallicity.png")
 
-Plots.plot(ylabel="SFR [Msun/yr]", xlabel="Time [Gyr]", ylim=(5e-1,1e1))
-for i in 1:length(models)
-Plots.plot!(X, Results["SFR"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+# outflow profile against height from the galaxy
+
+XLABEL_H = latexstring("\$H\\,\\mathrm{[kpc]}\$")
+XSCALE = ""
+if mode == "spherical"
+    XSCALE = Symbol("log10")
+elseif mode == "plane"
+    XSCALE = Symbol("none")
 end
-Plots.savefig("results/SFR.pdf")
 
-Plots.plot()
-for i in 1:length(models)
-Plots.plot!(X, Results["StellarMass"][i][h], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
+AllPhase = ["MassLoadingFactor", "EnergyLoadingFactor", "MetalLoadingFactor", "V", "Z"]
+ColdPhase = ["MassLoadingFactorCold", "EnergyLoadingFactorCold", "MetalLoadingFactorCold", "VCold", "ZCold"]
+HotPhase = ["MassLoadingFactorHot", "EnergyLoadingFactorHot", "MetalLoadingFactorHot", "VHot", "ZHot"]
+function addannotate(key, xmin, ymax)
+    if key in AllPhase
+        Plots.annotate!([(xmin, ymax-0.2, (latexstring("\$\\mathrm{All}\$"), 16, :black, :left))])
+    elseif key in ColdPhase
+        Plots.annotate!([(xmin, ymax-0.2, (latexstring("\$\\mathrm{Cold}\\,(T < 10^5\\,\\mathrm{K})\$"), 16, :black, :left))])
+    elseif key in HotPhase
+        Plots.annotate!([(xmin, ymax-0.2, (latexstring("\$\\mathrm{Hot}\\,(T > 10^5\\,\\mathrm{K})\$"), 16, :black, :left))])
+    end
 end
-Plots.savefig("results/StellarMass.pdf")
 
-eta_M = timeaverage_height(Results, "MassLoadingFactor")
-eta_E = timeaverage_height(Results, "EnergyLoadingFactor")
-eta_Z = timeaverage_height(Results, "MetalLoadingFactor")
-
-eta_MCold = timeaverage_height(Results, "MassLoadingFactorCold")
-eta_ECold = timeaverage_height(Results, "EnergyLoadingFactorCold")
-eta_ZCold = timeaverage_height(Results, "MetalLoadingFactorCold")
-
-eta_MHot = timeaverage_height(Results, "MassLoadingFactorHot")
-eta_EHot = timeaverage_height(Results, "EnergyLoadingFactorHot")
-eta_ZHot = timeaverage_height(Results, "MetalLoadingFactorHot")
-
-Plots.plot(xlabel="H [kpc]", ylabel="Mass loading factor", legend=:topright, yscale=:log10, ylim=(5e-4,1e3))
-for i in 1:length(models)
-Plots.plot!(H, eta_M[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
-Plots.plot!(H, eta_MCold[i], label=models[i][2]*" cold", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.7)
-Plots.plot!(H, eta_MHot[i], label=models[i][2]*" hot", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.4)
+for key in ["MassLoadingFactor", "MassLoadingFactorCold", "MassLoadingFactorHot"]
+    eta = timeaverage_height(Results, key)
+    ymin = -4
+    ymax = 2
+    Plots.plot(xlabel=XLABEL_H, xscale=XSCALE, ylabel=latexstring("\$\\log\\,\\eta_m \$"), legend=:topright, ylim=(ymin,ymax))
+    addannotate(key, Hstep, ymax)
+    for i in 1:length(models)
+        Plots.plot!(eta["H"][i], eta["mean"][i], label=models[i][2], color=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), ribbon=eta["std"][i], fillalpha=.3)
+    end
+    Plots.savefig("results/"*key*"_H.png")
 end
-Plots.savefig("results/MassLoadingFactor_H.pdf")
 
-Plots.plot(xlabel="H [kpc]", ylabel="Energy loading factor", legend=:topright, yscale=:log10, ylim=(1e-6,2e0))
-for i in 1:length(models)
-Plots.plot!(H, eta_E[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
-Plots.plot!(H, eta_ECold[i], label=models[i][2]*" cold", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.7)
-Plots.plot!(H, eta_EHot[i], label=models[i][2]*" hot", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.4)
+for key in ["EnergyLoadingFactor", "EnergyLoadingFactorCold", "EnergyLoadingFactorHot"]
+    eta = timeaverage_height(Results, key)
+    ymin = -6
+    ymax = 0
+    Plots.plot(xlabel=XLABEL_H, xscale=XSCALE, ylabel=latexstring("\$\\log\\,\\eta_e \$"), legend=:topright, ylim=(ymin, ymax))
+    addannotate(key, Hstep, ymax)
+    for i in 1:length(models)
+        Plots.plot!(eta["H"][i], eta["mean"][i], label=models[i][2], color=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), ribbon=eta["std"][i], fillalpha=.3)
+    end
+    Plots.savefig("results/"*key*"_H.png")
 end
-Plots.savefig("results/EnergyLoadingFactor_H.pdf")
 
-Plots.plot(xlabel="H [kpc]", ylabel="Metal loading factor", legend=:topright, yscale=:log10, ylim=(1e-3,1e1))
-for i in 1:length(models)
-Plots.plot!(H, eta_Z[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
-Plots.plot!(H, eta_ZCold[i], label=models[i][2]*" cold", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.7)
-Plots.plot!(H, eta_ZHot[i], label=models[i][2]*" hot", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.4)
+for key in ["MetalLoadingFactor", "MetalLoadingFactorCold", "MetalLoadingFactorHot"]
+    eta = timeaverage_height(Results, key)
+    ymin = -3
+    ymax = 1
+    Plots.plot(xlabel=XLABEL_H, xscale=XSCALE, ylabel=latexstring("\$\\log\\,\\eta_Z \$"), legend=:topright, ylim=(ymin, ymax))
+    addannotate(key, Hstep, ymax)
+    for i in 1:length(models)
+        Plots.plot!(eta["H"][i], eta["mean"][i], label=models[i][2], color=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), ribbon=eta["std"][i], fillalpha=.3)
+    end
+    Plots.savefig("results/"*key*"_H.png")
 end
-Plots.savefig("results/MetalLoadingFactor_H.pdf")
 
-V = timeaverage_height(Results, "V")
-VCold = timeaverage_height(Results, "VCold")
-VHot = timeaverage_height(Results, "VHot")
-
-Plots.plot(xlabel="H [kpc]", ylabel="V [km/s]", legend=:topright, yscale=:log10, ylim=(1e1,5e2))
-for i in 1:length(models)
-Plots.plot!(H, V[i], label=models[i][2], linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]))
-Plots.plot!(H, VCold[i], label=models[i][2]*" cold", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.7)
-Plots.plot!(H, VHot[i], label=models[i][2]*" hot", linecolor=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), linealpha=0.4)
+for key in ["V", "VCold", "VHot"]
+    V = timeaverage_height(Results, key)
+    ymin = 0
+    ymax = 3
+    Plots.plot(xlabel=XLABEL_H, xscale=XSCALE, ylabel=latexstring("\$\\log\\,(V \\mathrm{[km}\\,\\mathrm{s}^{-1}\\mathrm{]}\$"), legend=:bottomright, ylim=(ymin, ymax))
+    addannotate(key, Hstep, ymax)
+    for i in 1:length(models)
+        Plots.plot!(V["H"][i], V["mean"][i], label=models[i][2], color=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), ribbon=V["std"][i], fillalpha=.3)
+    end
+    Plots.savefig("results/"*key*"_H.png")
 end
-Plots.savefig("results/V_H.pdf")
+
+for key in ["Z", "ZCold", "ZHot"]
+    Z = timeaverage_height(Results, key)
+    ymin = -3
+    ymax = -1
+    Plots.plot(xlabel=XLABEL_H, xscale=XSCALE, ylabel=latexstring("\$\\log\\,Z\$"), legend=:topright, ylim=(ymin, ymax))
+    addannotate(key, Hstep, ymax)
+    for i in 1:length(models)
+        Plots.plot!(Z["H"][i], Z["mean"][i], label=models[i][2], color=Symbol(models[i][3]), linestyle=Symbol(models[i][4]), ribbon=Z["std"][i], fillalpha=.3)
+    end
+    Plots.savefig("results/"*key*"_H.png")
+end
